@@ -20,6 +20,8 @@ const STARTING_RADIUS: f32 = 0.5;
 const STARTING_WIDTH: f32 = 15.;
 const STARTING_HEIGHT: f32 = 15.;
 const STARTING_DAMPING: f32 = 1.;
+const NUM_PARTICLES: usize = 100;
+const PARTICLE_SPACING: f32 = 1.5;
 
 fn main() {
     App::new()
@@ -46,21 +48,32 @@ fn setup(
     });
 
     // Circle
-    commands.spawn((
-        MaterialMesh2dBundle {
-            mesh: meshes
-                .add(shape::Circle::new(STARTING_RADIUS).into())
-                .into(),
-            material: materials.add(ColorMaterial::from(Color::PURPLE)),
-            transform: Transform::from_translation(Vec3::new(-0., 0., 0.)),
-            ..default()
-        },
-        Velocity(Vec2::default()),
-        Ball {
-            radius: STARTING_RADIUS,
-            damping: STARTING_DAMPING,
-        },
-    ));
+    let particles_x = (STARTING_WIDTH / PARTICLE_SPACING).floor() as usize;
+    let particles_y = (STARTING_HEIGHT / PARTICLE_SPACING).floor() as usize;
+
+    for i in 0..particles_x {
+        for j in 0..particles_y {
+            let x_position = -STARTING_WIDTH / 2. + (i as f32 * PARTICLE_SPACING) + STARTING_RADIUS;
+            let y_position =
+                -STARTING_HEIGHT / 2. + (j as f32 * PARTICLE_SPACING) + STARTING_RADIUS;
+
+            commands.spawn((
+                MaterialMesh2dBundle {
+                    mesh: meshes
+                        .add(shape::Circle::new(STARTING_RADIUS).into())
+                        .into(),
+                    material: materials.add(ColorMaterial::from(Color::PURPLE)),
+                    transform: Transform::from_translation(Vec3::new(x_position, y_position, 0.)),
+                    ..default()
+                },
+                Velocity(Vec2::default()),
+                Ball {
+                    radius: STARTING_RADIUS,
+                    damping: STARTING_DAMPING,
+                },
+            ));
+        }
+    }
 
     commands.spawn((
         MaterialMesh2dBundle {
@@ -83,16 +96,35 @@ fn ui_example_system(
     mut contexts: EguiContexts,
 ) {
     egui::Window::new("Settings").show(contexts.ctx_mut(), |ui| {
-        let mut ball = ball_query.single_mut();
+        let mut first_radius;
+        let mut first_damping;
+        {
+            let ball = ball_query.iter().next().unwrap();
+            first_radius = ball.radius;
+            first_damping = ball.damping;
+        }
         ui.label("Ball radius:");
         ui.horizontal(|ui| {
-            ui.add(egui::DragValue::new(&mut ball.radius).speed(0.1));
+            if ui
+                .add(egui::DragValue::new(&mut first_radius).speed(0.1))
+                .changed()
+            {
+                for mut ball in ball_query.iter_mut() {
+                    ball.radius = first_radius;
+                }
+            }
         });
         ui.label("Damping:");
         ui.horizontal(|ui| {
-            ui.add(egui::DragValue::new(&mut ball.damping).speed(0.1));
+            if ui
+                .add(egui::DragValue::new(&mut first_damping).speed(0.1))
+                .changed()
+            {
+                for mut ball in ball_query.iter_mut() {
+                    ball.damping = first_damping;
+                }
+            }
         });
-
         let mut box_data = box_query.single_mut();
         ui.label("Box width:");
         ui.horizontal(|ui| {
