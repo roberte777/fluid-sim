@@ -207,7 +207,7 @@ fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>,
     let time_step = time.delta_seconds();
     // let time_step = 1. / 60.;
     // predict next positions
-    for (mut ball, mut velocity, mut transform) in ball_query.iter_mut() {
+    for (mut ball, mut velocity, transform) in ball_query.iter_mut() {
         velocity.0 += gravity * time_step;
         let position = Vec3::new(
             transform.translation.x + (velocity.0.x * time_step),
@@ -218,7 +218,6 @@ fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>,
     }
     // Density computation for each ball
     let mut ball_query_vec = ball_query.iter_mut().collect::<Vec<_>>();
-    // Assuming ball_query can be converted to Vec
     let len = ball_query_vec.len();
 
     for i in 0..len {
@@ -294,20 +293,20 @@ fn compute_pressure_force(ball_a: &Ball, ball_b: &Ball, r: Vec2, h: f32) -> Vec2
 }
 
 fn spiky(dst: f32, radius: f32) -> f32 {
-    let SPIKY_POW2_SCALING_FACTOR: f32 = 6. / (std::f32::consts::PI * RADIUS_OF_INFLUENCE.powi(4));
+    let spiky_pow2_scaling_factor: f32 = 6. / (std::f32::consts::PI * RADIUS_OF_INFLUENCE.powi(4));
 
     if dst < radius {
         let v = radius - dst;
-        return v * v * SPIKY_POW2_SCALING_FACTOR;
+        return v * v * spiky_pow2_scaling_factor;
     }
     0.0
 }
 
 fn spiky_der(dst: f32, radius: f32) -> f32 {
-    let SPIKY_POW2_SCALING_FACTOR: f32 = 12. / (std::f32::consts::PI * RADIUS_OF_INFLUENCE.powi(4));
+    let spiky_pow2_scaling_factor: f32 = 12. / (std::f32::consts::PI * RADIUS_OF_INFLUENCE.powi(4));
 
     if dst < radius {
-        return (dst - radius) * SPIKY_POW2_SCALING_FACTOR;
+        return (dst - radius) * spiky_pow2_scaling_factor;
     }
     0.0
 }
