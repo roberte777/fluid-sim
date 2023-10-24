@@ -20,12 +20,13 @@ struct Ball {
 }
 
 const STARTING_RADIUS: f32 = 0.35;
-const STARTING_WIDTH: f32 = 60.;
-const STARTING_HEIGHT: f32 = 30.;
-const STARTING_DAMPING: f32 = 0.75;
-const NUM_PARTICLES: usize = 900;
+const STARTING_WIDTH: f32 = 150.;
+const STARTING_HEIGHT: f32 = 90.;
+const STARTING_DAMPING: f32 = 0.95;
+const NUM_PARTICLES: usize = 1500;
 const PARTICLE_SPACING: f32 = 1.;
-const RADIUS_OF_INFLUENCE: f32 = 1.5;
+const RADIUS_OF_INFLUENCE: f32 = 3.;
+const COLUMNS: usize = 50; // Specify the number of columns
 
 fn main() {
     App::new()
@@ -46,23 +47,21 @@ fn setup(
     mut materials: ResMut<Assets<ColorMaterial>>,
     // window: Window,
 ) {
-    // println!("{}-{}", window.width(), window.height());
     commands.spawn(Camera2dBundle {
-        transform: Transform::from_scale(Vec3::new(0.05, 0.05, 0.05)),
+        transform: Transform::from_scale(Vec3::new(0.15, 0.15, 0.15)),
         ..default()
     });
 
     // Circle
-    let columns = 10; // Specify the number of columns
-    let rows = (NUM_PARTICLES as f32 / columns as f32).ceil() as usize;
+    let rows = (NUM_PARTICLES as f32 / COLUMNS as f32).ceil() as usize;
 
-    let total_width = (columns - 1) as f32 * PARTICLE_SPACING; // Total width particles will occupy
+    let total_width = (COLUMNS - 1) as f32 * PARTICLE_SPACING; // Total width particles will occupy
     let total_height = (rows - 1) as f32 * PARTICLE_SPACING; // Total height particles will occupy
 
     let start_x = -total_width / 2.0; // Starting x-coordinate to center the particles
     let start_y = -total_height / 2.0; // Starting y-coordinate to center the particles
 
-    for i in 0..columns {
+    for i in 0..COLUMNS {
         for j in 0..rows {
             // Skip creating particles if we have already created the specified number
             if (i * rows + j) >= NUM_PARTICLES {
@@ -189,29 +188,30 @@ fn gravity(
             transform.translation.x = half_bound_size.x * transform.translation.x.signum();
             velocity.0.x *= -1. * ball.damping;
         }
-        // if transform.translation.y.abs() > half_bound_size.y {
-        //     // Calculate how much the ball has penetrated the boundary
-        //     let penetration = transform.translation.y.abs() - half_bound_size.y;
-        //     // Adjust the ball's position to ensure it doesn't penetrate the boundary
-        //     transform.translation.y =
-        //         (half_bound_size.y - penetration) * transform.translation.y.signum();
-        //     velocity.0.y *= -1. * ball.damping;
-        // }
         if transform.translation.y.abs() > half_bound_size.y {
-            transform.translation.y = half_bound_size.y * transform.translation.y.signum();
+            // Calculate how much the ball has penetrated the boundary
+            let penetration = transform.translation.y.abs() - half_bound_size.y;
+            // Adjust the ball's position to ensure it doesn't penetrate the boundary
+            transform.translation.y =
+                (half_bound_size.y - penetration) * transform.translation.y.signum();
             velocity.0.y *= -1. * ball.damping;
         }
+        // if transform.translation.y.abs() > half_bound_size.y {
+        //     transform.translation.y = half_bound_size.y * transform.translation.y.signum();
+        //     velocity.0.y *= -1. * ball.damping;
+        // }
     }
 }
 
 fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>, time: Res<Time>) {
-    const GAS_CONSTANT: f32 = 50.0;
-    const REST_DENSITY: f32 = 1.5;
+    const GAS_CONSTANT: f32 = 500.0;
+    const REST_DENSITY: f32 = 3.;
     let gravity = Vec2::new(0.0, -9.8);
+    // let time_step = time.delta_seconds();
+    let time_step = 1. / 60.;
     // predict next positions
     for (mut ball, mut velocity, mut transform) in ball_query.iter_mut() {
-        let time_step = time.delta_seconds();
-        // let time_step = 1. / 60.;
+        velocity.0 += gravity * time_step;
         let position = Vec3::new(
             transform.translation.x + (velocity.0.x * time_step),
             transform.translation.y + (velocity.0.y * time_step),
@@ -228,15 +228,10 @@ fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>,
         let mut density = 0.0;
 
         for j in 0..len {
-            // Skip computation for the same ball
-            if i == j {
-                continue;
-            }
-
             let r = ball_query_vec[i]
-                .2
-                .translation
-                .distance(ball_query_vec[j].2.translation);
+                .0
+                .predicted_position
+                .distance(ball_query_vec[j].0.predicted_position);
             // summation of mass * smoothing kernel
             // assuming mass is 1
             density += 1. * spiky(r, RADIUS_OF_INFLUENCE);
@@ -253,17 +248,11 @@ fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>,
     for i in 0..len {
         let mut force = Vec2::new(0., 0.);
         let mut pressure_force = Vec2::ZERO;
-        let mut viscosity_force = Vec2::ZERO;
 
         for j in 0..len {
             // Skip computation for the same ball
-            if i == j {
-                continue;
-            }
 
-            let r = ball_query_vec[i].2.translation.truncate()
-                - ball_query_vec[j].2.translation.truncate();
-            let v = ball_query_vec[j].1 .0 - ball_query_vec[i].1 .0;
+            let r = ball_query_vec[i].0.predicted_position - ball_query_vec[j].0.predicted_position;
 
             pressure_force += compute_pressure_force(
                 &ball_query_vec[i].0,
@@ -271,87 +260,42 @@ fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>,
                 r,
                 RADIUS_OF_INFLUENCE,
             );
-            viscosity_force += compute_viscosity_force(
-                &ball_query_vec[i].0,
-                &ball_query_vec[j].0,
-                v,
-                r,
-                RADIUS_OF_INFLUENCE,
-            );
         }
-
-        let time_step = time.delta_seconds();
-        // let time_step = 1. / 60.;
 
         let density = ball_query_vec[i].0.density;
-        if density > 0.01 {
-            // ball_query_vec[i].1 .0 += pressure_force / density;
-            // ball_query_vec[i].1 .0 += viscosity_force / density;
-            force += pressure_force / density;
+        if density == 0. {
+            continue;
         }
-        // force += viscosity_force;
-        // force += gravity;
+        force += pressure_force / density;
+        // update positions
         ball_query_vec[i].1 .0 += force * time_step;
-        ball_query_vec[i].1 .0 = ball_query_vec[i].1 .0.clamp_length_max(10.);
+        // ball_query_vec[i].1 .0 = ball_query_vec[i].1 .0;
         let position = Vec3::new(
             ball_query_vec[i].2.translation.x + (ball_query_vec[i].1 .0.x * time_step),
             ball_query_vec[i].2.translation.y + (ball_query_vec[i].1 .0.y * time_step),
             0.,
         );
+        // panic of position is nan
+        if position.x.is_nan() || position.y.is_nan() {
+            panic!("position is nan");
+        }
         ball_query_vec[i].2.translation = position;
     }
 }
 fn compute_pressure_force(ball_a: &Ball, ball_b: &Ball, r: Vec2, h: f32) -> Vec2 {
-    let dst = r.length();
-    let dir = r.normalize();
-    if r.length() < 0.00001 {
+    if r.length() == 0. {
         return Vec2::ZERO;
     }
-    // let dw = spiky_kernel_pow2(r.length(), h);
+    let dir = r.normalize();
     let dw = spiky_der(r.length(), h);
-    if ball_b.density < 0.00001 {
+    if ball_b.density == 0. {
+        // random vec
+        // return Vec2::new(rand::random::<f32>(), rand::random::<f32>());
         return Vec2::ZERO;
     }
     let shared_pressure = (ball_a.pressure + ball_b.pressure) / 2.;
     // ball_b.pressure * dir * dw * 1. / ball_b.density
     shared_pressure * dir * dw * 1. / ball_b.density
-}
-
-fn compute_viscosity_force(ball_a: &Ball, ball_b: &Ball, v: Vec2, r: Vec2, h: f32) -> Vec2 {
-    // let laplacian = spiky_kernel_pow2(r.length(), h);
-    let laplacian = smoothing_kernel_poly6(r.length(), h);
-    let viscosity_coefficient = 0.01; // This can be adjusted based on your needs
-    if ball_b.density < 0.001 {
-        return Vec2::ZERO;
-    }
-    viscosity_coefficient * 1. * (v / ball_b.density) * laplacian
-}
-
-fn smoothing_kernel_poly6(dst: f32, radius: f32) -> f32 {
-    let POLY6_SCALING_FACTOR: f32 = 4. / (std::f32::consts::PI * RADIUS_OF_INFLUENCE.powi(8));
-    if dst < radius {
-        let v = radius * radius - dst * dst;
-        return v * v * v * POLY6_SCALING_FACTOR;
-    }
-    0.0
-}
-
-fn spiky_kernel_pow2(dst: f32, radius: f32) -> f32 {
-    let SPIKY_POW2_SCALING_FACTOR: f32 = 6. / (std::f32::consts::PI * RADIUS_OF_INFLUENCE.powi(4));
-
-    if dst < radius {
-        let v = radius - dst;
-        return v * v * SPIKY_POW2_SCALING_FACTOR;
-    }
-    0.0
-}
-fn smoothin_der(dst: f32, radius: f32) -> f32 {
-    let POLY6_SCALING_FACTOR: f32 = -24. / (std::f32::consts::PI * RADIUS_OF_INFLUENCE.powi(8));
-    if dst < radius {
-        let v = radius * radius - dst * dst;
-        return v * v * dst * POLY6_SCALING_FACTOR;
-    }
-    0.0
 }
 
 fn spiky(dst: f32, radius: f32) -> f32 {
@@ -372,10 +316,3 @@ fn spiky_der(dst: f32, radius: f32) -> f32 {
     }
     0.0
 }
-
-// fn viscosity_kernal(dst: f32, radius: f32) -> f32 {
-//     if radius - dst != 0. {
-//         return 45. / ((std::f32::consts::PI * radius.powi(6)) * (radius - dst));
-//     }
-//     0.
-// }
