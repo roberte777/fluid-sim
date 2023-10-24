@@ -19,12 +19,13 @@ struct Ball {
     predicted_position: Vec2,
 }
 
-const STARTING_RADIUS: f32 = 0.35;
+const STARTING_RADIUS: f32 = 0.45;
 const STARTING_WIDTH: f32 = 250.;
 const STARTING_HEIGHT: f32 = 175.;
-const STARTING_DAMPING: f32 = 0.95;
+const STARTING_DAMPING: f32 = 0.75;
 const NUM_PARTICLES: usize = 1500;
-const PARTICLE_SPACING: f32 = 1.5;
+const PARTICLE_SPACING: f32 = 2.;
+// decreasing this will compact the particles
 const RADIUS_OF_INFLUENCE: f32 = 3.;
 const COLUMNS: usize = 50; // Specify the number of columns
 
@@ -196,17 +197,13 @@ fn gravity(
                 (half_bound_size.y - penetration) * transform.translation.y.signum();
             velocity.0.y *= -1. * ball.damping;
         }
-        // if transform.translation.y.abs() > half_bound_size.y {
-        //     transform.translation.y = half_bound_size.y * transform.translation.y.signum();
-        //     velocity.0.y *= -1. * ball.damping;
-        // }
     }
 }
 
 fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>, time: Res<Time>) {
     const GAS_CONSTANT: f32 = 100.0;
     const REST_DENSITY: f32 = 5.;
-    let gravity = Vec2::new(0.0, -9.8);
+    let gravity = Vec2::new(0.0, -20.);
     let time_step = time.delta_seconds();
     // let time_step = 1. / 60.;
     // predict next positions
