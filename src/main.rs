@@ -16,13 +16,14 @@ struct Ball {
     damping: f32,
     density: f32,
     pressure: f32,
+    predicted_position: Vec2,
 }
 
 const STARTING_RADIUS: f32 = 0.35;
 const STARTING_WIDTH: f32 = 60.;
 const STARTING_HEIGHT: f32 = 30.;
 const STARTING_DAMPING: f32 = 0.75;
-const NUM_PARTICLES: usize = 350;
+const NUM_PARTICLES: usize = 900;
 const PARTICLE_SPACING: f32 = 1.;
 const RADIUS_OF_INFLUENCE: f32 = 1.5;
 
@@ -86,6 +87,7 @@ fn setup(
                     damping: STARTING_DAMPING,
                     density: 0.,
                     pressure: 0.,
+                    predicted_position: Vec2::default(),
                 },
             ));
         }
@@ -203,9 +205,20 @@ fn gravity(
 }
 
 fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>, time: Res<Time>) {
-    const GAS_CONSTANT: f32 = 10.0;
-    const REST_DENSITY: f32 = 5.0;
+    const GAS_CONSTANT: f32 = 50.0;
+    const REST_DENSITY: f32 = 1.5;
     let gravity = Vec2::new(0.0, -9.8);
+    // predict next positions
+    for (mut ball, mut velocity, mut transform) in ball_query.iter_mut() {
+        let time_step = time.delta_seconds();
+        // let time_step = 1. / 60.;
+        let position = Vec3::new(
+            transform.translation.x + (velocity.0.x * time_step),
+            transform.translation.y + (velocity.0.y * time_step),
+            0.,
+        );
+        ball.predicted_position = position.truncate();
+    }
     // Density computation for each ball
     let mut ball_query_vec = ball_query.iter_mut().collect::<Vec<_>>();
     // Assuming ball_query can be converted to Vec
