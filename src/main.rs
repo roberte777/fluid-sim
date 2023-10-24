@@ -20,11 +20,11 @@ struct Ball {
 }
 
 const STARTING_RADIUS: f32 = 0.35;
-const STARTING_WIDTH: f32 = 150.;
-const STARTING_HEIGHT: f32 = 90.;
+const STARTING_WIDTH: f32 = 250.;
+const STARTING_HEIGHT: f32 = 175.;
 const STARTING_DAMPING: f32 = 0.95;
 const NUM_PARTICLES: usize = 1500;
-const PARTICLE_SPACING: f32 = 1.;
+const PARTICLE_SPACING: f32 = 1.5;
 const RADIUS_OF_INFLUENCE: f32 = 3.;
 const COLUMNS: usize = 50; // Specify the number of columns
 
@@ -48,7 +48,7 @@ fn setup(
     // window: Window,
 ) {
     commands.spawn(Camera2dBundle {
-        transform: Transform::from_scale(Vec3::new(0.15, 0.15, 0.15)),
+        transform: Transform::from_scale(Vec3::new(0.25, 0.25, 0.25)),
         ..default()
     });
 
@@ -204,11 +204,11 @@ fn gravity(
 }
 
 fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>, time: Res<Time>) {
-    const GAS_CONSTANT: f32 = 500.0;
-    const REST_DENSITY: f32 = 3.;
+    const GAS_CONSTANT: f32 = 100.0;
+    const REST_DENSITY: f32 = 5.;
     let gravity = Vec2::new(0.0, -9.8);
-    // let time_step = time.delta_seconds();
-    let time_step = 1. / 60.;
+    let time_step = time.delta_seconds();
+    // let time_step = 1. / 60.;
     // predict next positions
     for (mut ball, mut velocity, mut transform) in ball_query.iter_mut() {
         velocity.0 += gravity * time_step;
@@ -251,6 +251,9 @@ fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>,
 
         for j in 0..len {
             // Skip computation for the same ball
+            if i == j {
+                continue;
+            }
 
             let r = ball_query_vec[i].0.predicted_position - ball_query_vec[j].0.predicted_position;
 
@@ -269,7 +272,6 @@ fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>,
         force += pressure_force / density;
         // update positions
         ball_query_vec[i].1 .0 += force * time_step;
-        // ball_query_vec[i].1 .0 = ball_query_vec[i].1 .0;
         let position = Vec3::new(
             ball_query_vec[i].2.translation.x + (ball_query_vec[i].1 .0.x * time_step),
             ball_query_vec[i].2.translation.y + (ball_query_vec[i].1 .0.y * time_step),
@@ -283,15 +285,11 @@ fn sph_system(mut ball_query: Query<(&mut Ball, &mut Velocity, &mut Transform)>,
     }
 }
 fn compute_pressure_force(ball_a: &Ball, ball_b: &Ball, r: Vec2, h: f32) -> Vec2 {
-    if r.length() == 0. {
-        return Vec2::ZERO;
-    }
     let dir = r.normalize();
     let dw = spiky_der(r.length(), h);
     if ball_b.density == 0. {
         // random vec
-        // return Vec2::new(rand::random::<f32>(), rand::random::<f32>());
-        return Vec2::ZERO;
+        return Vec2::new(rand::random::<f32>(), rand::random::<f32>());
     }
     let shared_pressure = (ball_a.pressure + ball_b.pressure) / 2.;
     // ball_b.pressure * dir * dw * 1. / ball_b.density
